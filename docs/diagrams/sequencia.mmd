@@ -1,0 +1,57 @@
+sequenceDiagram
+    autonumber
+    actor OP as Operador
+    participant WEB as DashboardView
+    participant API as MonitoramentoController
+    participant SVC as MonitoramentoService
+    participant REP as MonitoramentoRepository
+
+    OP->>WEB: abrirDashboard(ParametrosPainelDTO)
+    WEB-->>OP: EstadoPainelDTO
+
+    loop enquanto o painel estiver aberto
+        WEB->>WEB: iniciarConsulta(ParametrosPainelDTO)
+        WEB-->>WEB: RequisicaoMonitoramentoDTO
+        WEB-)API: consultarMonitoramento(RequisicaoMonitoramentoDTO)
+        activate API
+        Note over WEB,API: Fetch assíncrono. O navegador permanece interativo.
+        alt parametrosValidos == false
+            Note over API: Monta ResultadoConsultaDTO com status REJEITADA.
+        else parametrosValidos == true
+            Note over API,SVC: O contexto do usuário vem da sessão ou token verificado no servidor.
+            API->>SVC: consultar(ConsultaMonitoramentoDTO)
+            activate SVC
+            SVC->>SVC: validarAcesso(ConsultaMonitoramentoDTO)
+            SVC-->>SVC: AutorizacaoDTO
+            alt acessoPermitido == false
+                Note over SVC: Monta ResultadoConsultaDTO de acesso negado.
+            else acessoPermitido == true
+                par Condição da CNC
+                    SVC->>REP: consultarCNC(FiltroMonitoramentoDTO)
+                    REP-->>SVC: CNCResultadoDTO
+                and Sensores e últimas leituras
+                    SVC->>REP: consultarSensores(FiltroMonitoramentoDTO)
+                    REP-->>SVC: SensoresResultadoDTO
+                and Alertas existentes
+                    SVC->>REP: consultarAlertas(FiltroMonitoramentoDTO)
+                    REP-->>SVC: AlertasResultadoDTO
+                end
+                SVC->>SVC: qualificar(ResultadosFontesDTO)
+                SVC-->>SVC: ResultadoConsultaDTO
+                Note over SVC,REP: O join reúne sucesso ou falha de cada fonte antes de qualificar a resposta.
+            end
+            SVC-->>API: ResultadoConsultaDTO
+            deactivate SVC
+        end
+        API-->>WEB: ResultadoConsultaDTO
+        deactivate API
+
+        alt respostaAtual == true
+            WEB->>WEB: aplicarResultado(ResultadoConsultaDTO)
+            WEB-->>WEB: EstadoPainelDTO
+        else respostaAtual == false
+            WEB->>WEB: descartarResposta(ResultadoConsultaDTO)
+            WEB-->>WEB: EstadoPainelDTO
+        end
+        Note over WEB: Nova consulta após 10 segundos. Mudança de filtro inicia novo identificador.
+    end

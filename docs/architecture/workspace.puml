@@ -1,0 +1,31 @@
+@startuml
+!include <C4/C4_Container>
+LAYOUT_TOP_DOWN()
+title AutoFlow Monitor - C4 Nível 2 - Monitoramento da produção
+
+Person(operador, "Operador", "Consulta condição da CNC, sensores, leituras e alertas")
+System_Ext(aquisicao, "Aquisição industrial", "Sensores e gateway da CNC; simulador Python no piloto")
+
+System_Boundary(autoflow, "AutoFlow Monitor") {
+    Container(web, "Dashboard web", "HTML, CSS, JavaScript e Chart.js", "Consulta assíncrona, filtros, avisos de qualidade e descarte de respostas antigas")
+    Container(api, "API de monitoramento", "Python, FastAPI e Pydantic", "Controller, autorização, serviço agregador e repositórios SQLAlchemy")
+    ContainerDb(db, "Banco do AutoFlow", "PostgreSQL", "Ativos, sensores, medições qualificadas, contexto e alertas")
+    Container(ingestor, "Ingestor de telemetria", "Python e paho-mqtt", "Recebe leituras e mantém condição, qualidade e saúde do monitoramento")
+    ContainerQueue(mqtt, "Broker MQTT", "Eclipse Mosquitto", "Transporte dos lotes de telemetria")
+}
+
+Rel(operador, web, "Abre o painel e seleciona filtros", "HTTPS")
+Rel(web, api, "Consulta monitoramento a cada 10 s", "HTTPS / REST / JSON")
+Rel(api, db, "Consulta por repositórios internos", "SQL / TLS")
+Rel(aquisicao, mqtt, "Publica lotes de leituras", "MQTT / TLS")
+Rel(mqtt, ingestor, "Entrega telemetria", "MQTT / TLS")
+Rel(ingestor, db, "Grava medições, estado e alertas", "SQL / TLS")
+
+Lay_D(operador, web)
+Lay_D(web, api)
+Lay_D(api, db)
+Lay_R(api, ingestor)
+Lay_U(ingestor, mqtt)
+Lay_U(mqtt, aquisicao)
+SHOW_LEGEND()
+@enduml

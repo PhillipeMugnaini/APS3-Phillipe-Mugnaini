@@ -1,0 +1,38 @@
+stateDiagram-v2
+    direction TB
+
+    state EmProcessamento {
+        [*] --> ValidandoAcesso
+        ValidandoAcesso: entry / registrarVerificacao()
+        ValidandoAcesso: do / verificarPermissao()
+
+        ValidandoAcesso --> ConsultandoFontes: autorizar [acessoPermitido] / iniciarConsultasParalelas()
+        ConsultandoFontes: do / aguardarTodosOsResultados()
+
+        ConsultandoFontes --> QualificandoDados: concluirConsultas [todasFinalizadas] / reunirResultados()
+        QualificandoDados: do / avaliarQualidadeEAtualidade()
+        QualificandoDados: exit / registrarFimQualificacao()
+    }
+
+    [*] --> Criada
+    Criada: entry / registrarIdentificador()
+
+    Criada --> EmProcessamento: iniciarConsulta [parametrosValidos] / registrarInicio()
+    Criada --> Pronta: validarParametros [!parametrosValidos] / prepararRejeicao()
+
+    EmProcessamento --> Pronta: negarAcesso [emValidacaoAcesso && !acessoPermitido] / prepararRejeicao()
+    EmProcessamento --> Pronta: prepararResposta [emQualificacao] / registrarResultadoQualificado()
+    EmProcessamento --> Pronta: falharConsulta [falhaTecnica] / prepararFalha()
+
+    Pronta: entry / registrarFimConsulta()
+    Pronta: do / aguardarAplicacaoNoPainel()
+
+    Pronta --> Exibida: aplicarResposta [respostaAtual && resultadoDisponivel] / atualizarDados()
+    Pronta --> Rejeitada: aplicarResposta [respostaAtual && resultadoRejeitado] / exibirMotivo()
+    Pronta --> Falhou: aplicarResposta [respostaAtual && resultadoFalha] / exibirIndisponibilidade()
+    Pronta --> Descartada: aplicarResposta [!respostaAtual] / ignorarResposta()
+
+    Exibida --> [*]
+    Rejeitada --> [*]
+    Falhou --> [*]
+    Descartada --> [*]

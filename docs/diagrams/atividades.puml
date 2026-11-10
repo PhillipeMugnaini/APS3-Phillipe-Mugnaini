@@ -1,0 +1,97 @@
+@startuml
+title AutoFlow Monitor - Consulta do dashboard de produção
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 14
+skinparam shadowing false
+skinparam activityBackgroundColor #EDF5FB
+skinparam activityBorderColor #3A6F93
+skinparam activityDiamondBackgroundColor #FFF4E6
+skinparam activityDiamondBorderColor #BA7930
+
+|Operador|
+start
+:Selecionar CNC e período;
+:Abrir o dashboard;
+
+|Dashboard - JavaScript|
+:iniciarConsulta com identificador e filtros;
+:Enviar requisição HTTP assíncrona;
+
+|API - FastAPI|
+:Validar parâmetros e contexto autenticado;
+if (parametrosValidos?) then ([parametrosValidos])
+    :Parâmetros aceitos;
+else ([!parametrosValidos])
+    :Retornar ResultadoConsultaDTO REJEITADA;
+    |Dashboard - JavaScript|
+    if (respostaAtual?) then ([respostaAtual])
+        :aplicarResultado e exibir motivo;
+    else ([!respostaAtual])
+        :descartarResposta;
+    endif
+    stop
+endif
+
+|API - FastAPI|
+:validarAcesso à CNC solicitada;
+if (acessoPermitido?) then ([acessoPermitido])
+    :Acesso autorizado;
+else ([!acessoPermitido])
+    :Retornar ResultadoConsultaDTO REJEITADA;
+    |Dashboard - JavaScript|
+    if (respostaAtual?) then ([respostaAtual])
+        :aplicarResultado e remover dados protegidos;
+    else ([!respostaAtual])
+        :descartarResposta;
+    endif
+    stop
+endif
+
+|API - FastAPI|
+fork
+    |PostgreSQL|
+    :consultarCNC;
+    :Produzir CNCResultadoDTO\ncom sucesso ou falha;
+fork again
+    |PostgreSQL|
+    :consultarSensores e últimas leituras;
+    :Produzir SensoresResultadoDTO\ncom sucesso ou falha;
+fork again
+    |PostgreSQL|
+    :consultarAlertas existentes;
+    :Produzir AlertasResultadoDTO\ncom sucesso ou falha;
+end fork
+
+|API - FastAPI|
+:Reunir todos os resultados no join;
+:qualificar qualidade e idade dos dados;
+if (fonteMinimaDisponivel?) then ([fonteMinimaDisponivel])
+    if (resultadoCompleto?) then ([resultadoCompleto])
+        :Preparar ResultadoConsultaDTO COMPLETA;
+    else ([!resultadoCompleto])
+        :Preparar ResultadoConsultaDTO PARCIAL\ncom limitações por fonte;
+    endif
+else ([!fonteMinimaDisponivel])
+    :Preparar ResultadoConsultaDTO FALHOU;
+endif
+:Retornar ResultadoConsultaDTO;
+
+|Dashboard - JavaScript|
+if (respostaAtual?) then ([respostaAtual])
+    :aplicarResultado;
+    :Exibir dados qualificados, limitações\nou mensagem de erro correspondente;
+else ([!respostaAtual])
+    :descartarResposta sem substituir\no painel da consulta atual;
+endif
+
+|Operador|
+:Consultar as informações ou o aviso apresentado;
+stop
+
+legend bottom
+  As três consultas são concorrentes e usam conexões independentes.
+  Cada ramo retorna sucesso ou falha após timeout: nenhum desvia antes do join.
+  resultadoCompleto = todasFontesValidas && dadosRecentes.
+  A atividade representa uma consulta, repetida periodicamente pelo painel.
+endlegend
+@enduml
